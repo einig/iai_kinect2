@@ -34,6 +34,7 @@
 #include <ros/spinner.h>
 #include <sensor_msgs/CameraInfo.h>
 #include <sensor_msgs/Image.h>
+#include "std_msgs/String.h"
 
 #include <cv_bridge/cv_bridge.h>
 
@@ -64,6 +65,9 @@ enum Source
 class Recorder
 {
 private:
+  bool save;
+  bool running;
+
   const bool circleBoard;
   int circleFlags;
 
@@ -88,6 +92,7 @@ private:
   typedef message_filters::sync_policies::ExactTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::Image> ColorIrDepthSyncPolicy;
   ros::NodeHandle nh;
   ros::AsyncSpinner spinner;
+  ros::Subscriber subscriber;
   image_transport::ImageTransport it;
   image_transport::SubscriberFilter *subImageColor, *subImageIr, *subImageDepth;
   message_filters::Synchronizer<ColorIrDepthSyncPolicy> *sync;
@@ -136,6 +141,8 @@ public:
     }
 
     clahe = cv::createCLAHE(1.5, cv::Size(32, 32));
+
+    subscriber = nh.subscribe("/kinect2_calibration_control", 10, &Recorder::controlCallback, this);
   }
   ~Recorder()
   {
@@ -232,6 +239,15 @@ private:
     }
   }
 
+  void controlCallback(const std_msgs::String::ConstPtr& msg)
+  {
+    if (strcmp(msg->data.c_str(),"save") == 0) {
+      save = true;
+    } else if (strcmp(msg->data.c_str(),"quit") == 0) {
+      running = false;
+    }
+  }
+
   void callback(const sensor_msgs::Image::ConstPtr imageColor, const sensor_msgs::Image::ConstPtr imageIr, const sensor_msgs::Image::ConstPtr imageDepth)
   {
     std::vector<cv::Point2f> pointsColor, pointsIr;
@@ -320,8 +336,8 @@ private:
     cv::Mat colorDisp, irDisp;
     bool foundColor = false;
     bool foundIr = false;
-    bool save = false;
-    bool running = true;
+    save = false;
+    running = true;
 
     std::chrono::milliseconds duration(1);
     while(!update && ros::ok())
