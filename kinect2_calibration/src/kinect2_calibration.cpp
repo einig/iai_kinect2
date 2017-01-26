@@ -68,6 +68,7 @@ class Recorder
 private:
   bool save;
   bool running;
+  bool headless_;
 
   const bool circleBoard;
   int circleFlags;
@@ -103,7 +104,7 @@ private:
 
 public:
   Recorder(const std::string &path, const std::string &topicColor, const std::string &topicIr, const std::string &topicDepth,
-           const Source mode, const bool circleBoard, const bool symmetric, const cv::Size &boardDims, const float boardSize)
+           const Source mode, const bool circleBoard, const bool symmetric, const cv::Size &boardDims, const float boardSize, bool headless)
     : circleBoard(circleBoard), boardDims(boardDims), boardSize(boardSize), mode(mode), path(path), topicColor(topicColor), topicIr(topicIr),
       topicDepth(topicDepth), update(false), foundColor(false), foundIr(false), frame(0), nh("~"), spinner(0), it(nh), minIr(0), maxIr(0x7FFF)
   {
@@ -131,6 +132,8 @@ public:
     clahe = cv::createCLAHE(1.5, cv::Size(32, 32));
 
     controlService = nh.advertiseService("/kinect2_calibration_control", &Recorder::control_callback, this);
+    headless_ = headless;
+    if (headless_) { OUT_INFO("Running calibration without display"); }
   }
 
   ~Recorder()
@@ -141,7 +144,26 @@ public:
   {
     startRecord();
 
-    display();
+    if (headless_) {
+      running = true;
+      save = false;
+      while (running) {
+        if(update) {
+          lock.lock();
+          color = this->color;
+          ir = this->ir;
+          irGrey = this->irGrey;
+          depth = this->depth;
+          foundColor = this->foundColor;
+          foundIr = this->foundIr;
+          pointsColor = this->pointsColor;
+          pointsIr = this->pointsIr;
+          update = false;
+          lock.unlock();
+        }
+        ros::spinOnce();
+      }
+    } else { display(); }
 
     stopRecord();
   }
@@ -1226,6 +1248,7 @@ int main(int argc, char **argv)
   bool symmetric = true;
   bool rational = false;
   bool calibDepth = false;
+  bool headless = false;
   cv::Size boardDims = cv::Size(7, 6);
   float boardSize = 0.108;
   std::string ns = K2_DEFAULT_NS;
@@ -1275,6 +1298,10 @@ int main(int argc, char **argv)
     else if(arg == "rational")
     {
       rational = true;
+    }
+    else if(arg == "headless")
+    {
+      headless = true;
     }
     else if(arg.find("circle") == 0 && arg.find('x') != arg.rfind('x') && arg.rfind('x') != std::string::npos)
     {
@@ -1360,7 +1387,7 @@ int main(int argc, char **argv)
   }
   if(mode == RECORD)
   {
-    Recorder recorder(path, topicColor, topicIr, topicDepth, source, circleBoard, symmetric, boardDims, boardSize);
+    Recorder recorder(path, topicColor, topicIr, topicDepth, source, circleBoard, symmetric, boardDims, boardSize, headless);
 
     OUT_INFO("starting recorder...");
     recorder.run();
