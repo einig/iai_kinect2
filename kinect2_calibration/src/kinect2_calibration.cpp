@@ -48,6 +48,7 @@
 #include <kinect2_calibration/kinect2_calibration_definitions.h>
 #include <kinect2_bridge/kinect2_definitions.h>
 
+#include <kinect2_calibration/Kinect2CalibrationControl.h>
 
 enum Mode
 {
@@ -92,7 +93,7 @@ private:
   typedef message_filters::sync_policies::ExactTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::Image> ColorIrDepthSyncPolicy;
   ros::NodeHandle nh;
   ros::AsyncSpinner spinner;
-  ros::Subscriber subscriber;
+  ros::ServiceServer controlService;
   image_transport::ImageTransport it;
   image_transport::SubscriberFilter *subImageColor, *subImageIr, *subImageDepth;
   message_filters::Synchronizer<ColorIrDepthSyncPolicy> *sync;
@@ -129,7 +130,7 @@ public:
 
     clahe = cv::createCLAHE(1.5, cv::Size(32, 32));
 
-    subscriber = nh.subscribe("/kinect2_calibration_control", 10, &Recorder::controlCallback, this);
+    controlService = nh.advertiseService("/kinect2_calibration_control", &Recorder::control_callback, this);
   }
 
   ~Recorder()
@@ -227,13 +228,26 @@ private:
     }
   }
 
-  void controlCallback(const std_msgs::String::ConstPtr& msg)
+  bool control_callback(kinect2_calibration::Kinect2CalibrationControl::Request &req, kinect2_calibration::Kinect2CalibrationControl::Response &res)
   {
-    if (strcmp(msg->data.c_str(),"save") == 0) {
-      save = true;
-    } else if (strcmp(msg->data.c_str(),"quit") == 0) {
+    if (req.quit) {
       running = false;
+      res.suceeded = true;
+      return true;
     }
+    if (req.save) {
+      for (int i = 0; i < 10; i++) {
+        ros::Duration(0.1).sleep();
+        if((mode == COLOR && foundColor) || (mode == IR && foundIr) || (mode == SYNC && foundColor && foundIr))
+        {
+          store(color, ir, irGrey, depth, pointsColor, pointsIr);
+          res.suceeded = true;
+          return true;
+        }
+      }
+    }
+    res.suceeded = false;
+    return true;
   }
 
   void callback(const sensor_msgs::Image::ConstPtr imageColor, const sensor_msgs::Image::ConstPtr imageIr, const sensor_msgs::Image::ConstPtr imageDepth)
