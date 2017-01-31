@@ -733,6 +733,15 @@ private:
 
     for(size_t i = 0; i < pointsColor.size(); ++i)
     {
+      if(pointsColor[i].size() != pointsIr[i].size()) {
+        OUT_ERROR("Color points (" << pointsColor[i].size() << ") do not match IR points (" << pointsIr[i].size() << ") in Image: " << i);
+        OUT_ERROR("Please remove broken image and retry calibration");
+        return false;
+      }
+    }
+
+    for(size_t i = 0; i < pointsColor.size(); ++i)
+    {
       const std::vector<cv::Point2f> &pColor = pointsColor[i];
       const std::vector<cv::Point2f> &pIr = pointsIr[i];
 
@@ -761,6 +770,14 @@ private:
     double error;
 
     OUT_INFO("calibrating intrinsics...");
+
+    for (uint i = 0; i < pointsBoard.size(); i++) {
+      if (pointsBoard[i].size() != points[i].size()) {
+        OUT_ERROR("Expected points (" << pointsBoard[i].size() << ") do not match recognized points (" << points[i].size() << ") in Image: " << i);
+        OUT_ERROR("Please remove broken image and retry calibration");
+        return;
+      }
+    }
     error = cv::calibrateCamera(pointsBoard, points, size, cameraMatrix, distortion, rvecs, tvecs, flags, termCriteria);
     OUT_INFO("re-projection error: " << error << std::endl);
 
@@ -1445,7 +1462,10 @@ int main(int argc, char **argv)
     DepthCalibration calib(path, symmetric, boardDims, boardSize);
 
     OUT_INFO("restoring files...");
-    calib.restore();
+    if (!calib.restore()) {
+      OUT_ERROR("restoring files failed");
+      return -1;
+    }
 
     OUT_INFO("starting calibration...");
     calib.calibrate();
@@ -1455,7 +1475,10 @@ int main(int argc, char **argv)
     CameraCalibration calib(path, source, circleBoard, symmetric, boardDims, boardSize, rational);
 
     OUT_INFO("restoring files...");
-    calib.restore();
+    if (!calib.restore()) {
+      OUT_ERROR("restoring files failed");
+      return -1;
+    }
 
     OUT_INFO("starting calibration...");
     calib.calibrate();
