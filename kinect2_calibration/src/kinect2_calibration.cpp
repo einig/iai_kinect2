@@ -1001,7 +1001,10 @@ public:
       }
 
       cv::remap(depth, depth, mapX, mapY, cv::INTER_NEAREST);
-      computeROI(depth, points[i], region, roi);
+      if (!computeROI(depth, points[i], region, roi)){
+        OUT_WARN("ROI not found, skipping image: " << images[i]);
+        continue;
+      }
 
       getPlane(i, planeNormal, planeDistance);
 
@@ -1118,7 +1121,7 @@ private:
     distance = normal.dot(translation);
   }
 
-  void computeROI(const cv::Mat &depth, const std::vector<cv::Point2f> &points, cv::Mat &region, cv::Rect &roi) const
+  bool computeROI(const cv::Mat &depth, const std::vector<cv::Point2f> &points, cv::Mat &region, cv::Rect &roi) const
   {
     std::vector<cv::Point2f>  norm;
     std::vector<cv::Point> undist, hull;
@@ -1137,6 +1140,10 @@ private:
       }
     }
 
+    if(undist.size() == 0){
+      return false;
+    }
+
     roi = cv::boundingRect(undist);
 
     cv::Mat mask = cv::Mat::zeros(depth.rows, depth.cols, CV_8U);
@@ -1147,6 +1154,7 @@ private:
     cv::Mat tmp;
     depth.copyTo(tmp, mask);
     tmp(roi).copyTo(region);
+    return true;
   }
 
   bool readFiles(const std::vector<std::string> &files)
